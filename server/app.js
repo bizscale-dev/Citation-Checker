@@ -412,7 +412,7 @@ app.post('/api/check', async (req, res) => {
             : BLOCK_STATUS.has(a.httpStatus)
               ? a.fetchedWith === 'browser'
                 ? `Blocked even in real Chrome (HTTP ${a.httpStatus}). The site likely blocks your country/IP. Use a US VPN or set PROXY_URL`
-                : `Site blocked the server (HTTP ${a.httpStatus}). Click Open in my Chrome (VPN on) and use the Send to Checker bookmark`
+                : `Site blocked the server (HTTP ${a.httpStatus})`
               : `Page had no readable content (HTTP ${a.httpStatus})`,
     });
   }
