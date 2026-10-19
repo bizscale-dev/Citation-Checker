@@ -1,12 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
 import { parseDetails } from './parseDetails.js';
+import {
+  IconAlert,
+  IconBuilding,
+  IconCheck,
+  IconChrome,
+  IconClipboard,
+  IconExternal,
+  IconGoogle,
+  IconLink,
+  IconLock,
+  IconMail,
+  IconMinus,
+  IconPhone,
+  IconPin,
+  IconRefresh,
+  IconSearch,
+  IconSparkle,
+  IconX,
+  Logo,
+  Spinner,
+} from './icons.jsx';
 
 const FIELDS = [
-  { key: 'name', label: 'Business Name', placeholder: 'MacLock Locksmith Services LLC' },
-  { key: 'phone', label: 'Phone', placeholder: '(417) 425-3167' },
-  { key: 'email', label: 'Email', placeholder: 'jamcneely27@gmail.com' },
-  { key: 'address', label: 'Address', placeholder: '123 Main St, Springfield, MO 65802', multiline: true },
-  { key: 'gmb', label: 'GMB Link', placeholder: 'https://maps.app.goo.gl/...' },
+  { key: 'name', label: 'Business Name', icon: IconBuilding },
+  { key: 'phone', label: 'Phone', icon: IconPhone },
+  { key: 'email', label: 'Email', icon: IconMail },
+  { key: 'address', label: 'Address', icon: IconPin },
+  { key: 'gmb', label: 'GMB Link', icon: IconGoogle },
 ];
 
 const STATUS_LABEL = { match: 'Correct', partial: 'Close', mismatch: 'Wrong', absent: 'Not listed' };
@@ -170,178 +191,276 @@ export default function App() {
     return s;
   }, [results]);
 
+  const checkedCount = Object.values(results).filter((r) => r.data).length;
+  const loadingCount = Object.values(results).filter((r) => r.loading).length;
+  const progress = links.length ? Math.round((checkedCount / links.length) * 100) : 0;
+
   return (
     <div className="app">
-      <header>
-        <h1>Citation Checker</h1>
-        <p>Checks each citation page for your business name, phone, email and address.</p>
+      <header className="hero">
+        <div className="hero-inner">
+          <div className="brand">
+            <Logo size={44} />
+            <div>
+              <h1>Citation Checker</h1>
+              <p>Verify your business info across every directory listing, in one click.</p>
+            </div>
+          </div>
+          <div className={`conn ${extVersion ? 'on' : 'off'}`} title={extVersion ? `Helper extension v${extVersion}` : 'Helper extension not detected'}>
+            <IconChrome size={16} />
+            {extVersion ? 'Chrome connected' : 'Chrome not connected'}
+            <span className="dot" />
+          </div>
+        </div>
       </header>
 
       <main>
         <section className="panel info-panel">
-          <h2>Business Details</h2>
+          <div className="panel-head">
+            <span className="panel-icon violet">
+              <IconBuilding />
+            </span>
+            <div>
+              <h2>Business Details</h2>
+              <p className="panel-sub">Paste everything, it sorts itself out</p>
+            </div>
+          </div>
           <textarea
             className="details-input"
             rows={6}
             value={details}
-            placeholder={'Paste everything in any order, e.g.\nMacLock Locksmith Services LLC (417) 425-3167 jamcneely27@gmail.com\n123 Main St, Springfield, MO 65802\nhttps://maps.app.goo.gl/...'}
+            placeholder={'e.g.\nMacLock Locksmith Services LLC (417) 425-3167 jamcneely27@gmail.com\n123 Main St, Springfield, MO 65802\nhttps://maps.app.goo.gl/...'}
             onChange={(e) => {
               setDetails(e.target.value);
               setOverrides({}); // new text: detect everything again
             }}
           />
 
-          <h3 className="detected-title">Detected</h3>
-          {FIELDS.map((f) => {
-            const edited = overrides[f.key] !== undefined;
-            return (
-              <label key={f.key} className={`detected ${info[f.key] ? 'found' : 'missing'}`}>
-                <span>
-                  {f.label}
-                  {edited && (
-                    <button type="button" className="link-button" onClick={() => setOverrides(({ [f.key]: _, ...rest }) => rest)}>
-                      undo edit
-                    </button>
-                  )}
-                </span>
-                <input
-                  value={info[f.key]}
-                  placeholder="not found, won't be checked"
-                  onChange={(e) => setOverrides((o) => ({ ...o, [f.key]: e.target.value }))}
-                />
-              </label>
-            );
-          })}
-          <p className="hint">Fix anything detected wrong right here. Empty items are skipped.</p>
+          <div className="detected-head">
+            <IconSparkle size={14} /> Detected
+            <span className="detected-count">
+              {FIELDS.filter((f) => info[f.key]).length}/{FIELDS.length}
+            </span>
+          </div>
+          <div className="detected-list">
+            {FIELDS.map((f) => {
+              const edited = overrides[f.key] !== undefined;
+              const Icon = f.icon;
+              return (
+                <label key={f.key} className={`detected ${info[f.key] ? 'found' : 'missing'}`}>
+                  <span className="detected-icon">
+                    <Icon size={15} />
+                  </span>
+                  <span className="detected-body">
+                    <span className="detected-label">
+                      {f.label}
+                      {edited && (
+                        <button type="button" className="link-button" onClick={() => setOverrides(({ [f.key]: _, ...rest }) => rest)}>
+                          undo edit
+                        </button>
+                      )}
+                    </span>
+                    <input
+                      value={info[f.key]}
+                      placeholder="Not found, won't be checked"
+                      onChange={(e) => setOverrides((o) => ({ ...o, [f.key]: e.target.value }))}
+                    />
+                  </span>
+                  <span className="detected-mark">{info[f.key] ? <IconCheck size={14} /> : <IconMinus size={14} />}</span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="hint">Something detected wrong? Fix it right in the list. Empty items are skipped.</p>
         </section>
 
         <section className="panel links-panel">
-          <h2>Citation Links</h2>
+          <div className="panel-head">
+            <span className="panel-icon blue">
+              <IconLink />
+            </span>
+            <div>
+              <h2>Citation Links</h2>
+              <p className="panel-sub">One link per line</p>
+            </div>
+            {links.length > 0 && <span className="count-chip">{links.length} links</span>}
+          </div>
           <textarea
             className="links-input"
             rows={5}
             value={linksText}
-            placeholder={'Paste one link per line\nhttps://findmetop.com/listing/...\nhttps://www.yelp.com/biz/...'}
+            placeholder={'https://findmetop.com/listing/...\nhttps://www.yelp.com/biz/...'}
             onChange={(e) => setLinksText(e.target.value)}
           />
-          <div className={`fetch-mode ${extVersion ? 'on' : ''}`}>
-            {extVersion ? (
-              <>
-                <span>Your Chrome is connected.</span>
-                <label>
-                  <input type="radio" checked={mode === 'chrome'} onChange={() => setMode('chrome')} /> Server first, my Chrome (VPN)
-                  only for blocked links
-                </label>
-                <label>
-                  <input type="radio" checked={mode === 'server'} onChange={() => setMode('server')} /> Server only
-                </label>
-              </>
-            ) : (
-              <span>
-                <b>Your Chrome is not connected</b>, so links the server gets blocked on (403) can't be read with your VPN. To
-                fix: in this Chrome window open <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click{' '}
-                <b>Load unpacked</b>, pick the <code>chrome-extension</code> folder in this project, then reload this page.
-                Already installed? Click the <b>reload</b> icon on "Citation Checker Helper" (version 1.1.0 or newer).
-              </span>
-            )}
-            {!useMyChrome && (
-              <label title="Uses a separate hidden Chrome with its own profile: helps with bot checks, but has NO VPN and NO logins">
-                <input type="checkbox" checked={serverChromeOpt} onChange={(e) => setServerChromeOpt(e.target.checked)} /> Retry blocked
-                pages in a separate hidden Chrome (no VPN)
-              </label>
-            )}
-          </div>
-          <div className="actions">
-            <button onClick={checkAll} disabled={running || !links.length || !hasInfo}>
-              {running ? 'Checking…' : `Check ${links.length || ''} link${links.length === 1 ? '' : 's'}`}
-            </button>
-            {Object.keys(results).length > 0 && (
-              <div className="summary">
-                <span className="pill match">{summary.ok} correct</span>
-                <span className="pill mismatch">{summary.bad} with errors</span>
-                <span className="pill unreadable">{summary.unreadable} couldn't read</span>
+
+          {extVersion ? (
+            <div className="mode">
+              <span className="mode-label">Blocked links (403)</span>
+              <div className="segmented">
+                <button className={mode === 'chrome' ? 'active' : ''} onClick={() => setMode('chrome')}>
+                  Retry in my Chrome (VPN)
+                </button>
+                <button className={mode === 'server' ? 'active' : ''} onClick={() => setMode('server')}>
+                  Server only
+                </button>
               </div>
-            )}
+            </div>
+          ) : (
+            <div className="notice">
+              <IconLock size={18} />
+              <div>
+                <b>Connect your Chrome to read blocked (403) links with your VPN.</b> Open <code>chrome://extensions</code>, turn on{' '}
+                <b>Developer mode</b>, click <b>Load unpacked</b> and pick the <code>chrome-extension</code> folder, then reload this
+                page. Already installed? Click <b>reload</b> on "Citation Checker Helper" (v1.1.0+).
+                <label className="inline-check" title="Uses a separate hidden Chrome with its own profile: helps with bot checks, but has NO VPN and NO logins">
+                  <input type="checkbox" checked={serverChromeOpt} onChange={(e) => setServerChromeOpt(e.target.checked)} /> Retry blocked
+                  pages in a separate hidden Chrome (no VPN, local only)
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div className="actions">
+            <button className="primary" onClick={checkAll} disabled={running || !links.length || !hasInfo}>
+              {running ? (
+                <>
+                  <Spinner /> Checking {checkedCount}/{links.length}
+                </>
+              ) : (
+                <>
+                  <IconSearch size={17} /> Check {links.length || ''} link{links.length === 1 ? '' : 's'}
+                </>
+              )}
+            </button>
+            {!hasInfo && <span className="muted">Add business details first</span>}
           </div>
+
+          {(checkedCount > 0 || loadingCount > 0) && (
+            <div className="stats">
+              <div className="stat">
+                <span className="stat-num">
+                  {checkedCount}
+                  <small>/{links.length}</small>
+                </span>
+                <span className="stat-label">Checked</span>
+              </div>
+              <div className="stat good">
+                <span className="stat-num">{summary.ok}</span>
+                <span className="stat-label">All correct</span>
+              </div>
+              <div className="stat bad">
+                <span className="stat-num">{summary.bad}</span>
+                <span className="stat-label">With errors</span>
+              </div>
+              <div className="stat gray">
+                <span className="stat-num">{summary.unreadable}</span>
+                <span className="stat-label">Couldn&apos;t read</span>
+              </div>
+              <div className="progress" aria-label={`${progress}% checked`}>
+                <span style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          )}
 
           <div className="results">
             {links.map((url) => {
               const r = results[url];
               const d = r?.data;
               const hasError = d?.missing || (d?.readable && Object.values(d.checks).some((c) => c && c.status === 'mismatch'));
+              const state = !r ? 'pending' : r.loading ? 'loading' : hasError ? 'bad' : !d.readable ? 'unreadable' : 'good';
+              const badge = {
+                pending: ['Not checked', null],
+                loading: [r?.inYourChrome ? 'In your Chrome…' : 'Checking…', <Spinner key="s" size={12} />],
+                good: ['All correct', <IconCheck key="i" size={13} />],
+                bad: [d?.missing ? 'Listing gone' : 'Has errors', <IconX key="i" size={13} />],
+                unreadable: ["Couldn't read", <IconAlert key="i" size={13} />],
+              }[state];
+              let host = '';
+              try {
+                host = new URL(url).hostname.replace(/^www\./, '');
+              } catch {}
               return (
-                <article key={url} className={`result ${!r ? '' : r.loading ? 'loading' : hasError ? 'bad' : !d.readable ? 'unreadable' : 'good'}`}>
+                <article key={url} className={`result ${state}`}>
                   <div className="result-head">
-                    <a href={url} target="_blank" rel="noreferrer" title={url}>
-                      {d?.title || url}
-                    </a>
-                    <div className="result-actions">
-                      {d?.source === 'pasted' && <span className="tag">pasted text</span>}
-                      {d?.fetchedWith === 'your-chrome' && <span className="tag">your Chrome</span>}
-                      {d?.fetchedWith === 'browser' &&<span className="tag" title="Plain request was blocked, so this page was loaded in real Chrome">via Chrome</span>}
-                      {d && !d.readable && !d.missing &&
-                        (serverChrome ? (
-                          <button className="small ghost" onClick={() => openInChrome(url)} title="Opens the page in the checker's hidden Chrome">
-                            Open in Chrome
-                          </button>
-                        ) : (
-                          // a real link, not window.open(): popup blockers never stop a clicked link
-                          <a className="button small ghost" href={url} target="_blank" rel="noopener noreferrer" title="Opens the link in a new tab of your Chrome">
-                            Open in Chrome
-                          </a>
-                        ))}
-                      <button className="small ghost" onClick={() => checkOne(url)} disabled={r?.loading || !hasInfo}>
-                        Recheck
-                      </button>
-                      <button className="small ghost" onClick={() => setPasteFor(url)} disabled={r?.loading}>
-                        Paste text
-                      </button>
+                    <img className="site-icon" src={`https://www.google.com/s2/favicons?domain=${host}&sz=64`} alt="" loading="lazy" />
+                    <div className="result-title">
+                      <a href={url} target="_blank" rel="noreferrer" title={url}>
+                        {d?.title || host || url}
+                      </a>
+                      <div className="url">{url}</div>
                     </div>
+                    <span className={`badge ${state}`}>
+                      {badge[1]}
+                      {badge[0]}
+                    </span>
                   </div>
-                  <div className="url">{url}</div>
 
-                  {!r && <div className="muted">Not checked yet</div>}
+                  {(d?.source === 'pasted' || d?.fetchedWith === 'your-chrome' || d?.fetchedWith === 'browser') && (
+                    <div className="tags">
+                      {d?.source === 'pasted' && <span className="tag">pasted text</span>}
+                      {d?.fetchedWith === 'your-chrome' && <span className="tag violet">read in your Chrome</span>}
+                      {d?.fetchedWith === 'browser' && <span className="tag">via hidden Chrome</span>}
+                    </div>
+                  )}
+
                   {r?.loading && (
-                    <div className="muted">
+                    <div className="loading-line">
                       {r.inYourChrome
                         ? 'Server was blocked, reading it in your Chrome (VPN)…'
                         : 'Fetching page… (owner or dead links also search the site for the public listing)'}
                     </div>
                   )}
                   {d?.publicUrl && (
-                    <div className="found-msg">
+                    <div className="msg info">
                       <div>
                         {d.originalProblem}. Found the public listing via {d.foundVia}:{' '}
                         <a href={d.publicUrl} target="_blank" rel="noreferrer">
                           {d.publicUrl}
                         </a>
                       </div>
-                      <button className="small" onClick={() => useFoundLink(url, d.publicUrl)}>
+                      <button className="small primary" onClick={() => useFoundLink(url, d.publicUrl)}>
                         Use this link
                       </button>
                     </div>
                   )}
-                  {d?.missing && <div className="missing-msg">{d.error}</div>}
-                  {d && !d.readable && !d.missing && (
-                    <div className="unreadable-msg">
-                      Couldn't read this page: {d.error.replace(/\.?$/, '.')}
-                      <br />
-                      {useMyChrome
-                        ? 'Turn your VPN on and click Recheck, or copy the page (Ctrl+A, Ctrl+C) and use Paste text.'
-                        : 'Connect your Chrome (see the yellow bar above) so blocked links are read with your VPN, or copy the page (Ctrl+A, Ctrl+C) and use Paste text.'}
+                  {d?.missing && (
+                    <div className="msg danger">
+                      <IconX size={16} />
+                      <div>{d.error}</div>
                     </div>
                   )}
-                  {d?.warning && <div className="warning">{d.warning}</div>}
+                  {d && !d.readable && !d.missing && (
+                    <div className="msg neutral">
+                      <IconAlert size={16} />
+                      <div>
+                        {d.error.replace(/\.?$/, '.')}{' '}
+                        <span className="muted">
+                          {useMyChrome
+                            ? 'Turn your VPN on and click Recheck, or copy the page (Ctrl+A, Ctrl+C) and use Paste text.'
+                            : 'Connect your Chrome (see above) so blocked links are read with your VPN, or copy the page and use Paste text.'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {d?.warning && (
+                    <div className="msg warn">
+                      <IconAlert size={16} />
+                      <div>{d.warning}</div>
+                    </div>
+                  )}
                   {d?.readable && (
                     <div className="checks">
                       {FIELDS.map((f) => {
                         const c = d.checks[f.key];
                         if (!c) return null;
+                        const Icon = f.icon;
                         return (
                           <div key={f.key} className={`check ${c.status}`}>
                             <div className="check-label">
-                              <span>{f.label}</span>
-                              <b>{STATUS_LABEL[c.status]}</b>
+                              <span className="check-name">
+                                <Icon size={14} /> {f.label}
+                              </span>
+                              <b className="check-status">{STATUS_LABEL[c.status]}</b>
                             </div>
                             <div className="check-value">{info[f.key]}</div>
                             {c.note && <div className="check-note">{c.note}</div>}
@@ -350,19 +469,51 @@ export default function App() {
                       })}
                     </div>
                   )}
+
+                  <div className="result-actions">
+                    {d &&
+                      !d.readable &&
+                      !d.missing &&
+                      (serverChrome ? (
+                        <button className="small ghost" onClick={() => openInChrome(url)} title="Opens the page in the checker's hidden Chrome">
+                          <IconExternal size={13} /> Open in Chrome
+                        </button>
+                      ) : (
+                        // a real link, not window.open(): popup blockers never stop a clicked link
+                        <a className="button small ghost" href={url} target="_blank" rel="noopener noreferrer" title="Opens the link in a new tab of your Chrome">
+                          <IconExternal size={13} /> Open in Chrome
+                        </a>
+                      ))}
+                    <button className="small ghost" onClick={() => checkOne(url)} disabled={r?.loading || !hasInfo}>
+                      <IconRefresh size={13} /> Recheck
+                    </button>
+                    <button className="small ghost" onClick={() => setPasteFor(url)} disabled={r?.loading}>
+                      <IconClipboard size={13} /> Paste text
+                    </button>
+                  </div>
                 </article>
               );
             })}
-            {!links.length && <div className="muted empty">Add citation links above to get started.</div>}
+            {!links.length && (
+              <div className="empty">
+                <Logo size={56} />
+                <h3>No links yet</h3>
+                <p>Paste your citation links above, one per line, then hit Check.</p>
+              </div>
+            )}
           </div>
         </section>
       </main>
 
+      <footer className="footer">Citation Checker · name, phone, email, address and GMB checked on every listing</footer>
+
       {pasteFor && (
         <div className="modal-backdrop" onClick={() => setPasteFor(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Paste page text</h3>
-            <p className="muted">{pasteFor}</p>
+            <h3>
+              <IconClipboard size={18} /> Paste page text
+            </h3>
+            <p className="muted modal-url">{pasteFor}</p>
             <textarea
               autoFocus
               rows={12}
@@ -370,11 +521,11 @@ export default function App() {
               placeholder="Open the listing, press Ctrl+A then Ctrl+C, and paste here"
               onChange={(e) => setPasteText(e.target.value)}
             />
-            <div className="actions">
+            <div className="actions end">
               <button className="ghost" onClick={() => setPasteFor(null)}>
                 Cancel
               </button>
-              <button onClick={submitPaste} disabled={!pasteText.trim()}>
+              <button className="primary" onClick={submitPaste} disabled={!pasteText.trim()}>
                 Check pasted text
               </button>
             </div>
