@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Citation Checker Helper",
+  "version": "1.1.0",
+  "description": "Lets the local Citation Checker app read citation pages in your own Chrome (your VPN, logins and cookies).",
+  "permissions": ["tabs", "scripting", "webRequest"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*", "https://citation-checker-kohl.vercel.app/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

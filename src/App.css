@@ -1,0 +1,120 @@
+:root {
+  --bg: #f4f6f9;
+  --panel: #ffffff;
+  --text: #1c2430;
+  --muted: #6b7686;
+  --border: #dde3ea;
+  --accent: #2563eb;
+  --green: #15803d;
+  --green-bg: #e8f6ed;
+  --red: #c62828;
+  --red-bg: #fdecec;
+  --amber: #b45309;
+  --amber-bg: #fff6e0;
+  --gray-bg: #eef0f3;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+
+.app { max-width: 1400px; margin: 0 auto; padding: 24px 16px 48px; }
+header h1 { margin: 0 0 4px; font-size: 26px; }
+header p { margin: 0 0 20px; color: var(--muted); }
+
+main { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 20px; align-items: start; }
+@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.panel h2 { margin: 0 0 16px; font-size: 18px; }
+.info-panel { position: sticky; top: 16px; }
+
+.field { display: block; margin-bottom: 14px; }
+.field span { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+
+input, textarea {
+  width: 100%;
+  font: inherit;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  resize: vertical;
+}
+input:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
+.links-input { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+
+.hint, .muted { color: var(--muted); font-size: 13px; }
+.muted.empty { padding: 24px 0; text-align: center; }
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.ghost { background: #fff; color: var(--accent); }
+button.small { padding: 4px 10px; font-size: 12px; }
+
+.fetch-mode { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 13px; margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--amber-bg); color: var(--amber); }
+.fetch-mode.on { background: var(--green-bg); color: var(--green); }
+.fetch-mode label { display: flex; gap: 6px; align-items: center; color: var(--text); cursor: pointer; }
+.fetch-mode input { width: auto; }
+.fetch-mode code { background: rgb(0 0 0 / 0.06); padding: 1px 5px; border-radius: 4px; }
+.actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
+.summary { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+.pill.match { background: var(--green-bg); color: var(--green); }
+.pill.mismatch { background: var(--red-bg); color: var(--red); }
+.pill.unreadable { background: var(--gray-bg); color: var(--muted); }
+
+.results { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.result { border: 1px solid var(--border); border-left: 5px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.result.good { border-left-color: var(--green); }
+.result.bad { border-left-color: var(--red); background: #fffafa; }
+.result.unreadable { border-left-color: #9aa3ad; }
+.result.loading { opacity: 0.7; }
+
+.result-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.result-head a { font-weight: 600; color: var(--text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-head a:hover { text-decoration: underline; }
+.result-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+.tag { font-size: 11px; background: var(--gray-bg); color: var(--muted); padding: 2px 8px; border-radius: 999px; }
+.url { font-size: 12px; color: var(--muted); margin: 2px 0 10px; word-break: break-all; }
+
+.unreadable-msg, .warning { font-size: 13px; padding: 10px 12px; border-radius: 8px; }
+.unreadable-msg { background: var(--gray-bg); }
+.found-msg { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; padding: 10px 12px; border-radius: 8px; background: #e8f0fe; color: #1e3a8a; margin-bottom: 10px; }
+.found-msg a { color: var(--accent); word-break: break-all; }
+.found-msg button { flex-shrink: 0; }
+.missing-msg { font-size: 13px; padding: 10px 12px; border-radius: 8px; background: var(--red-bg); color: var(--red); font-weight: 600; }
+.warning { background: var(--amber-bg); color: var(--amber); margin-bottom: 10px; }
+
+.checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.check { border-radius: 8px; padding: 10px 12px; border: 1px solid transparent; }
+.check.match { background: var(--green-bg); border-color: #bfe3cb; }
+.check.mismatch { background: var(--red-bg); border-color: #f3b9b9; }
+.check.partial { background: var(--amber-bg); border-color: #f2d48f; }
+.check-label { display: flex; justify-content: space-between; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+.check.match .check-label b { color: var(--green); }
+.check.mismatch .check-label b { color: var(--red); }
+.check.partial .check-label b { color: var(--amber); }
+.check.absent { background: var(--gray-bg); border-color: #d6dbe1; }
+.check.absent .check-label b { color: var(--muted); }
+.check-value { font-size: 14px; margin-top: 4px; word-break: break-word; }
+.check.mismatch .check-value { color: var(--red); font-weight: 600; }
+.check-note { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.check.mismatch .check-note { color: var(--red); }
+
+.modal-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.4); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.modal { background: #fff; border-radius: 12px; padding: 20px; width: min(640px, 100%); }
+.modal h3 { margin: 0 0 4px; }
+.modal .muted { word-break: break-all; margin: 0 0 12px; }
+.modal .actions { justify-content: flex-end; }

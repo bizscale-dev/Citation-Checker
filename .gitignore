@@ -1,0 +1,8 @@
+node_modules
+dist
+.browser-profile
+.vercel
+
+# secrets (Vercel token, proxy credentials); the example file is kept
+.env*
+!.env.example
