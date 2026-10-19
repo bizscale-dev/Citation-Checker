@@ -49,7 +49,11 @@ input:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent
 .hint, .muted { color: var(--muted); font-size: 13px; }
 .muted.empty { padding: 24px 0; text-align: center; }
 
-button {
+button,
+a.button {
+  display: inline-block;
+  text-decoration: none;
+  line-height: normal;
   font: inherit;
   font-weight: 600;
   padding: 9px 18px;
@@ -60,8 +64,10 @@ button {
   cursor: pointer;
 }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
-button.ghost { background: #fff; color: var(--accent); }
-button.small { padding: 4px 10px; font-size: 12px; }
+button.ghost,
+a.button.ghost { background: #fff; color: var(--accent); }
+button.small,
+a.button.small { padding: 4px 10px; font-size: 12px; }
 
 .fetch-mode { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 13px; margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--amber-bg); color: var(--amber); }
 .fetch-mode.on { background: var(--green-bg); color: var(--green); }

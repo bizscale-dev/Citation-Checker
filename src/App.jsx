@@ -254,11 +254,17 @@ export default function App() {
                       {d?.source === 'pasted' && <span className="tag">pasted text</span>}
                       {d?.fetchedWith === 'your-chrome' && <span className="tag">your Chrome</span>}
                       {d?.fetchedWith === 'browser' &&<span className="tag" title="Plain request was blocked, so this page was loaded in real Chrome">via Chrome</span>}
-                      {d && !d.readable && !d.missing && (
-                        <button className="small ghost" onClick={() => openInChrome(url)} title="Opens the link in a new tab of your Chrome">
-                          Open in Chrome
-                        </button>
-                      )}
+                      {d && !d.readable && !d.missing &&
+                        (serverChrome ? (
+                          <button className="small ghost" onClick={() => openInChrome(url)} title="Opens the page in the checker's hidden Chrome">
+                            Open in Chrome
+                          </button>
+                        ) : (
+                          // a real link, not window.open(): popup blockers never stop a clicked link
+                          <a className="button small ghost" href={url} target="_blank" rel="noopener noreferrer" title="Opens the link in a new tab of your Chrome">
+                            Open in Chrome
+                          </a>
+                        ))}
                       <button className="small ghost" onClick={() => checkOne(url)} disabled={r?.loading || !hasInfo}>
                         Recheck
                       </button>
