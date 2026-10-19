@@ -118,3 +118,14 @@ button.small { padding: 4px 10px; font-size: 12px; }
 .modal h3 { margin: 0 0 4px; }
 .modal .muted { word-break: break-all; margin: 0 0 12px; }
 .modal .actions { justify-content: flex-end; }
+
+.bookmarklet {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff !important;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: grab;
+}

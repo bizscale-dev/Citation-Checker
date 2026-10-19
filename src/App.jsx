@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const FIELDS = [
   { key: 'name', label: 'Business Name', placeholder: 'MacLock Locksmith Services LLC' },
@@ -48,6 +48,29 @@ function useExtension() {
   return version;
 }
 
+// ---- "Send to Checker" bookmark: no-install way to read a page in the user's own Chrome ----
+// Run on a citation page that the app opened, it posts the page's HTML back to this app
+// (window.opener, only to this exact origin) and closes the tab. If the site cut the link to
+// the opener, it copies the page text so it can be pasted instead.
+const bookmarkletCode = (origin) =>
+  'javascript:' +
+  encodeURIComponent(
+    `(()=>{const d={source:'citation-checker-bookmarklet',url:location.href,title:document.title,html:document.documentElement.outerHTML};` +
+      `if(window.opener){window.opener.postMessage(d,${JSON.stringify(origin)});document.title='Sent to Citation Checker';setTimeout(()=>window.close(),400);}` +
+      `else{navigator.clipboard.writeText(document.body.innerText).then(()=>alert('This site blocked sending. The page text is copied: go back to the Citation Checker, click Paste text on this link and press Ctrl+V.'),()=>alert('Open this page with the Open in my Chrome button in the Citation Checker first.'));}})()`,
+  );
+
+function BookmarkletLink() {
+  const ref = useRef(null);
+  // set via the DOM: React refuses javascript: URLs in href
+  useEffect(() => ref.current?.setAttribute('href', bookmarkletCode(window.location.origin)), []);
+  return (
+    <a ref={ref} className="bookmarklet" onClick={(e) => e.preventDefault()} title="Drag me to your bookmarks bar">
+      📌 Send to Checker
+    </a>
+  );
+}
+
 async function callCheck(body) {
   const res = await fetch('/api/check', {
     method: 'POST',
@@ -85,11 +108,12 @@ export default function App() {
 
   const hasInfo = Object.values(info).some((v) => v.trim());
 
-  const checkOne = async (url, pastedText) => {
+  // `sentPage`: HTML the "Send to Checker" bookmark posted back from the user's own tab
+  const checkOne = async (url, pastedText, sentPage) => {
     setResults((r) => ({ ...r, [url]: { loading: true } }));
     try {
-      let page;
-      if (!pastedText && useMyChrome) {
+      let page = sentPage;
+      if (!page && !pastedText && useMyChrome) {
         page = await extFetch(url);
         // your Chrome couldn't show it (bad certificate, frozen tab...): let the server try instead
         if (page.error) page = undefined;
@@ -112,9 +136,35 @@ export default function App() {
     setRunning(false);
   };
 
+  // tabs we opened for the bookmark, so its message can be matched back to the right link
+  const openedTabs = useRef(new Map()); // window -> link url
+  const checkOneRef = useRef(checkOne);
+  checkOneRef.current = checkOne;
+
+  useEffect(() => {
+    const onMsg = (e) => {
+      if (e.data?.source !== 'citation-checker-bookmarklet' || typeof e.data.html !== 'string') return;
+      const url = openedTabs.current.get(e.source);
+      if (!url) return; // only accept pages this app opened
+      openedTabs.current.delete(e.source);
+      // the bookmark can't see the HTTP status, so recognise error pages by their title
+      const m = (e.data.title || '').match(/\b(401|403|404|410|429|503)\b|forbidden|access denied|not found/i);
+      const status = m ? Number(m[1]) || (/not found/i.test(m[0]) ? 404 : 403) : 200;
+      checkOneRef.current(url, undefined, { ok: status < 400, status, finalUrl: e.data.url, html: e.data.html });
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
   const openInChrome = async (url) => {
-    // a new tab in this browser = your own Chrome profile, with your VPN and logins
-    if (!serverChrome) return window.open(url, '_blank');
+    // a new tab in this browser = your own Chrome profile, with your VPN and logins.
+    // Kept as window.opener so the "Send to Checker" bookmark can post the page back.
+    if (!serverChrome) {
+      const tab = window.open(url, '_blank');
+      if (tab) openedTabs.current.set(tab, url);
+      setResults((r) => (r[url]?.data ? { ...r, [url]: { ...r[url], waitingForBookmark: true } } : r));
+      return;
+    }
     const res = await fetch('/api/browser/open', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -206,11 +256,10 @@ export default function App() {
               </>
             ) : (
               <span>
-                <b>Your Chrome is not connected, so your VPN is not used.</b> Pages are read by the server. To fix: in this
-                Chrome window open <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b>,
-                pick the <code>chrome-extension</code> folder in this project, then reload this page. Already installed?
-                Click the <b>reload</b> icon on "Citation Checker Helper" there (it must be version 1.1.0 or newer to work on
-                this site), then reload this page.
+                Pages are read by the server. For links the server can't open (403 / blocked), click{' '}
+                <b>Open in my Chrome</b> on that link, then click the <BookmarkletLink /> bookmark on the page that opens. One-time
+                setup: drag that button to your bookmarks bar (Ctrl+Shift+B shows the bar).{' '}
+                <span className="muted">Optional: the helper extension does this automatically.</span>
               </span>
             )}
             {!useMyChrome && (
@@ -248,9 +297,13 @@ export default function App() {
                       {d?.source === 'pasted' && <span className="tag">pasted text</span>}
                       {d?.fetchedWith === 'your-chrome' && <span className="tag">your Chrome</span>}
                       {d?.fetchedWith === 'browser' &&<span className="tag" title="Plain request was blocked, so this page was loaded in real Chrome">via Chrome</span>}
-                      {d && !d.readable && (
-                        <button className="small ghost" onClick={() => openInChrome(url)} title="Opens a Chrome window the checker shares cookies with. Solve the captcha or log in, close it, then Recheck">
-                          Open in Chrome
+                      {d && !d.readable && !d.missing && (
+                        <button
+                          className={`small ${useMyChrome || serverChrome ? 'ghost' : ''}`}
+                          onClick={() => openInChrome(url)}
+                          title="Opens the link in a new tab of your Chrome (your VPN and logins). Then click the Send to Checker bookmark there"
+                        >
+                          Open in my Chrome
                         </button>
                       )}
                       <button className="small ghost" onClick={() => checkOne(url)} disabled={r?.loading || !hasInfo}>
@@ -283,8 +336,14 @@ export default function App() {
                     <div className="unreadable-msg">
                       Couldn't read this page: {d.error.replace(/\.?$/, '.')}
                       <br />
-                      Fix: click <b>Open in Chrome</b>, solve the captcha or log in, close that window and click{' '}
-                      <b>Recheck</b>. Or copy the page (Ctrl+A, Ctrl+C) and use <b>Paste text</b>.
+                      {r.waitingForBookmark ? (
+                        <b>Waiting: on the tab that opened, click the 📌 Send to Checker bookmark (VPN on). It checks automatically.</b>
+                      ) : (
+                        <>
+                          Fix: click <b>Open in my Chrome</b>, then click the <b>📌 Send to Checker</b> bookmark on that page. Or
+                          copy the page (Ctrl+A, Ctrl+C) and use <b>Paste text</b>.
+                        </>
+                      )}
                     </div>
                   )}
                   {d?.warning && <div className="warning">{d.warning}</div>}
