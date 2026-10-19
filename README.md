@@ -45,7 +45,8 @@ Production: `npm run build && npm start` (serves on http://localhost:3001)
 
 Live at https://citation-checker-kohl.vercel.app (project `citation-checker`, team `developer-2077s-projects`).
 
-- Redeploy after changes: `vercel deploy --prod`
+- Deploys automatically: every push to `main` on https://github.com/bizscale-dev/Citation-Checker goes live.
+  Manual deploy if ever needed: `vercel deploy --prod`
 - The API runs as a Vercel function (`api/index.js` → `server/app.js`). The hidden-Chrome fallback is local-only.
 - The helper extension works on the live site too (its address is in `chrome-extension/manifest.json`).
   If the address ever changes, update `matches` there and click reload on the extension in `chrome://extensions`.
