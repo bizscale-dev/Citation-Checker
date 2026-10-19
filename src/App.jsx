@@ -208,7 +208,9 @@ export default function App() {
               <span>
                 <b>Your Chrome is not connected, so your VPN is not used.</b> Pages are read by the server. To fix: in this
                 Chrome window open <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b>,
-                pick the <code>chrome-extension</code> folder in this project, then reload this page.
+                pick the <code>chrome-extension</code> folder in this project, then reload this page. Already installed?
+                Click the <b>reload</b> icon on "Citation Checker Helper" there (it must be version 1.1.0 or newer to work on
+                this site), then reload this page.
               </span>
             )}
             {!useMyChrome && (
