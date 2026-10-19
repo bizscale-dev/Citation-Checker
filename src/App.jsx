@@ -5,6 +5,7 @@ const FIELDS = [
   { key: 'phone', label: 'Phone', placeholder: '(417) 425-3167' },
   { key: 'email', label: 'Email', placeholder: 'jamcneely27@gmail.com' },
   { key: 'address', label: 'Address', placeholder: '123 Main St, Springfield, MO 65802', multiline: true },
+  { key: 'gmb', label: 'GMB Link', placeholder: 'https://maps.app.goo.gl/...' },
 ];
 
 const STATUS_LABEL = { match: 'Correct', partial: 'Close', mismatch: 'Wrong', absent: 'Not listed' };
@@ -63,7 +64,7 @@ async function callCheck(body) {
 }
 
 export default function App() {
-  const [info, setInfo] = useState(() => load('cc.info', { name: '', phone: '', email: '', address: '' }));
+  const [info, setInfo] = useState(() => ({ name: '', phone: '', email: '', address: '', gmb: '', ...load('cc.info', {}) }));
   const [linksText, setLinksText] = useState(() => load('cc.links', ''));
   const [results, setResults] = useState({}); // url -> { loading, data, error }
   const [running, setRunning] = useState(false);

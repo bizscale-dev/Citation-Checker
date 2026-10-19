@@ -2,6 +2,7 @@ import express from 'express';
 import * as cheerio from 'cheerio';
 import { Agent, ProxyAgent, fetch } from 'undici';
 import { findPublicListing } from './findPublic.js';
+import { checkGmb, gmbLinksFrom } from './gmb.js';
 
 // The hidden-Chrome fallback only exists when running locally; on Vercel there is no Chrome
 // (and puppeteer is heavy), so it's loaded on demand and never on Vercel.
@@ -112,10 +113,12 @@ function extractPage(html) {
   $('[data-cfemail]').each((_, el) => extra.push(decodeCfEmail($(el).attr('data-cfemail'))));
 
   const title = $('title').first().text().trim();
+  // Google Business Profile links: anchors, map iframes, and URLs anywhere in the HTML (JSON-LD, scripts)
+  const links = gmbLinksFrom($, html);
   $('script, style, noscript, svg').remove();
   const bodyText = $('body').length ? $('body').text() : $.root().text();
 
-  return { title, text: `${title}\n${bodyText}\n${extra.join('\n')}`.replace(/[ \t]+/g, ' ') };
+  return { title, links, text: `${title}\n${bodyText}\n${extra.join('\n')}`.replace(/[ \t]+/g, ' ') };
 }
 
 function decodeCfEmail(hex) {
@@ -267,7 +270,7 @@ async function smartFetch(url, timeoutMs = 20000, { allowBrowser = true } = {}) 
 
 // classify a fetched page and run the field checks on it
 function analyzePage(page, pageUrl, info) {
-  const { title, text } = extractPage(page.html);
+  const { title, text, links } = extractPage(page.html);
   const wordCount = text.split(/\s+/).filter(Boolean).length;
   const alertMsg = (page.html.match(/alert\(['"]([^'"]+)['"]\)/) || [])[1];
   const reason = alertMsg || `HTTP ${page.status}`;
@@ -280,7 +283,14 @@ function analyzePage(page, pageUrl, info) {
 
   const checks = runChecks(info, text, new URL(pageUrl).hostname.replace(/^www\./, ''));
   const looksLikeLogin = /log ?in|sign ?in/i.test(title) && Object.values(checks).every((c) => !c || c.status !== 'match');
-  return { ...base, kind: looksLikeLogin ? 'login' : 'ok', reason, checks };
+  // gmbLinks is kept off the JSON response; only withGmb() uses it
+  return Object.defineProperty({ ...base, kind: looksLikeLogin ? 'login' : 'ok', reason, checks }, 'gmbLinks', { value: links });
+}
+
+// the GMB check may need to resolve short links (maps.app.goo.gl), so it runs async after the rest
+async function withGmb(a, info) {
+  if (a.checks && info.gmb?.trim()) a.checks.gmb = await checkGmb(info.gmb, a.gmbLinks || []).catch(() => null);
+  return a;
 }
 
 const okResponse = (a, extra = {}) => ({
@@ -315,7 +325,9 @@ app.post('/api/check', async (req, res) => {
 
   // manual mode: user pasted the page content themselves
   if (pastedText) {
-    return res.json({ readable: true, source: 'pasted', checks: runChecks(info, pastedText) });
+    const pasted = { checks: runChecks(info, pastedText), gmbLinks: gmbLinksFrom(cheerio.load(''), pastedText) };
+    await withGmb(pasted, info);
+    return res.json({ readable: true, source: 'pasted', checks: pasted.checks });
   }
 
   let target;
@@ -363,6 +375,7 @@ app.post('/api/check', async (req, res) => {
     if (hit?.found) {
       const pub = analyzePage({ ok: true, status: hit.status, finalUrl: hit.publicUrl, html: hit.html }, hit.publicUrl, info);
       if (pub.kind === 'ok') {
+        await withGmb(pub, info);
         return res.json(
           okResponse(pub, {
             publicUrl: hit.publicUrl,
@@ -416,6 +429,7 @@ app.post('/api/check', async (req, res) => {
               : `Page had no readable content (HTTP ${a.httpStatus})`,
     });
   }
+  await withGmb(a, info);
   res.json(okResponse(a, a.kind === 'login' ? { warning: 'Looks like a login page. Use a public listing URL or paste the page text.' } : {}));
 });
 
