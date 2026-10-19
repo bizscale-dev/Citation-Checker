@@ -125,3 +125,12 @@ a.button.small { padding: 4px 10px; font-size: 12px; }
 .modal .muted { word-break: break-all; margin: 0 0 12px; }
 .modal .actions { justify-content: flex-end; }
 
+
+.details-input { font-size: 14px; line-height: 1.45; }
+.detected-title { margin: 16px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.detected { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: center; margin-bottom: 6px; }
+.detected > span { font-size: 12px; font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
+.detected input { padding: 6px 9px; font-size: 13px; }
+.detected.found input { border-color: #bfe3cb; background: var(--green-bg); }
+.detected.missing input { background: var(--gray-bg); }
+.link-button { background: none; border: none; padding: 0; color: var(--accent); font-size: 11px; font-weight: 500; text-align: left; cursor: pointer; }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { parseDetails } from './parseDetails.js';
 
 const FIELDS = [
   { key: 'name', label: 'Business Name', placeholder: 'MacLock Locksmith Services LLC' },
@@ -64,7 +65,18 @@ async function callCheck(body) {
 }
 
 export default function App() {
-  const [info, setInfo] = useState(() => ({ name: '', phone: '', email: '', address: '', gmb: '', ...load('cc.info', {}) }));
+  // one free-form box; fields are detected from it, and any detected value can be corrected by hand
+  const [details, setDetails] = useState(() => {
+    const saved = load('cc.details', null);
+    if (saved !== null) return saved;
+    // carry over info saved by the older separate-fields version
+    const old = load('cc.info', {});
+    return ['name', 'phone', 'email', 'address', 'gmb'].map((k) => old[k]).filter(Boolean).join('\n');
+  });
+  const [overrides, setOverrides] = useState(() => load('cc.overrides', {}));
+  const info = useMemo(() => ({ ...parseDetails(details), ...overrides }), [details, overrides]);
+  useEffect(() => localStorage.setItem('cc.details', JSON.stringify(details)), [details]);
+  useEffect(() => localStorage.setItem('cc.overrides', JSON.stringify(overrides)), [overrides]);
   const [linksText, setLinksText] = useState(() => load('cc.links', ''));
   const [results, setResults] = useState({}); // url -> { loading, data, error }
   const [running, setRunning] = useState(false);
@@ -80,7 +92,6 @@ export default function App() {
   useEffect(() => localStorage.setItem('cc.mode', JSON.stringify(mode)), [mode]);
   useEffect(() => localStorage.setItem('cc.serverChrome', JSON.stringify(serverChromeOpt)), [serverChromeOpt]);
 
-  useEffect(() => localStorage.setItem('cc.info', JSON.stringify(info)), [info]);
   useEffect(() => localStorage.setItem('cc.links', JSON.stringify(linksText)), [linksText]);
 
   const links = useMemo(
@@ -168,27 +179,40 @@ export default function App() {
 
       <main>
         <section className="panel info-panel">
-          <h2>Business Info</h2>
-          {FIELDS.map((f) => (
-            <label key={f.key} className="field">
-              <span>{f.label}</span>
-              {f.multiline ? (
-                <textarea
-                  rows={2}
-                  value={info[f.key]}
-                  placeholder={f.placeholder}
-                  onChange={(e) => setInfo({ ...info, [f.key]: e.target.value })}
-                />
-              ) : (
+          <h2>Business Details</h2>
+          <textarea
+            className="details-input"
+            rows={6}
+            value={details}
+            placeholder={'Paste everything in any order, e.g.\nMacLock Locksmith Services LLC (417) 425-3167 jamcneely27@gmail.com\n123 Main St, Springfield, MO 65802\nhttps://maps.app.goo.gl/...'}
+            onChange={(e) => {
+              setDetails(e.target.value);
+              setOverrides({}); // new text: detect everything again
+            }}
+          />
+
+          <h3 className="detected-title">Detected</h3>
+          {FIELDS.map((f) => {
+            const edited = overrides[f.key] !== undefined;
+            return (
+              <label key={f.key} className={`detected ${info[f.key] ? 'found' : 'missing'}`}>
+                <span>
+                  {f.label}
+                  {edited && (
+                    <button type="button" className="link-button" onClick={() => setOverrides(({ [f.key]: _, ...rest }) => rest)}>
+                      undo edit
+                    </button>
+                  )}
+                </span>
                 <input
                   value={info[f.key]}
-                  placeholder={f.placeholder}
-                  onChange={(e) => setInfo({ ...info, [f.key]: e.target.value })}
+                  placeholder="not found, won't be checked"
+                  onChange={(e) => setOverrides((o) => ({ ...o, [f.key]: e.target.value }))}
                 />
-              )}
-            </label>
-          ))}
-          <p className="hint">Leave a field empty to skip checking it.</p>
+              </label>
+            );
+          })}
+          <p className="hint">Fix anything detected wrong right here. Empty items are skipped.</p>
         </section>
 
         <section className="panel links-panel">
