@@ -115,14 +115,40 @@ function extractPage(html) {
   const title = $('title').first().text().trim();
   // Google Business Profile links: anchors, map iframes, and URLs anywhere in the HTML (JSON-LD, scripts)
   const links = gmbLinksFrom($, html);
-  const hrefs = $('a[href]')
-    .map((_, el) => $(el).attr('href'))
-    .get()
-    .filter((h) => /^https?:\/\//i.test(h));
+  const hrefs = outboundUrls($, html);
   $('script, style, noscript, svg').remove();
   const bodyText = $('body').length ? $('body').text() : $.root().text();
 
   return { title, links, hrefs, text: `${title}\n${bodyText}\n${extra.join('\n')}`.replace(/[ \t]+/g, ' ') };
+}
+
+const safeDecode = (s) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
+
+// Every URL the page links to, including ones hidden behind redirect wrappers
+// (t.umblr.com/redirect?z=..., out.reddit.com/..., l.facebook.com/l.php?u=...) and
+// links kept in the page's JSON/script data instead of <a> tags.
+function outboundUrls($, html) {
+  const out = new Set();
+  const add = (u) => {
+    if (!u || !/^https?:\/\//i.test(u)) return;
+    out.add(u);
+    try {
+      // unwrap redirect parameters that carry the real destination
+      for (const v of new URL(u).searchParams.values()) if (/^https?:\/\//i.test(v)) out.add(v);
+    } catch {}
+  };
+  $('a[href]').each((_, el) => add($(el).attr('href')));
+  // URLs written anywhere in the HTML, plain or %-encoded (https%3A%2F%2F...) or JSON-escaped (https:\/\/...)
+  const raw = html.replace(/\\\//g, '/');
+  for (const m of raw.matchAll(/https?:\/\/[^\s"'<>\\)]+/gi)) add(m[0]);
+  for (const m of raw.matchAll(/https?%3A%2F%2F[^\s"'<>&\\)]+/gi)) add(safeDecode(m[0]));
+  return [...out];
 }
 
 function decodeCfEmail(hex) {
