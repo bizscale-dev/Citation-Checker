@@ -127,6 +127,17 @@ main {
 .panel-icon.blue { background: var(--blue-bg); color: var(--blue-ink); }
 .count-chip { margin-left: auto; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--brand-soft); color: var(--brand-ink); }
 
+/* ---------- citation / profile tabs ---------- */
+.tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--border); }
+.tabs button { flex: 1; border: none; background: transparent; color: var(--muted); padding: 9px 12px; font-size: 13.5px; border-radius: 9px; }
+.tabs button.active { background: var(--panel); color: var(--text); box-shadow: var(--shadow-sm), inset 0 -2px 0 var(--brand); }
+.tabs button:hover:not(.active):not(:disabled) { color: var(--text); border-color: transparent; }
+.tabs button.active svg { color: var(--brand); }
+.tab-count { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--gray-bg); color: var(--muted); }
+.tabs button.active .tab-count { background: var(--brand-soft); color: var(--brand-ink); }
+.tab-hint { margin: -2px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--muted); padding: 9px 12px; border-radius: 10px; background: var(--brand-soft); }
+.tab-hint b { color: var(--brand-ink); }
+
 /* ---------- inputs ---------- */
 input, textarea {
   width: 100%;
@@ -292,6 +303,9 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; backgrou
 .check.partial .check-name { color: var(--amber); }
 .check.partial .check-status { background: var(--amber); color: #fff; }
 .check.absent .check-status { background: var(--gray-border); color: var(--gray); }
+.check.missing { background: var(--red-bg); border-color: var(--red-border); }
+.check.missing .check-name, .check.missing .check-note { color: var(--red); }
+.check.missing .check-status { background: var(--red); color: #fff; }
 
 .result-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
 

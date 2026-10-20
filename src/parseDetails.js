@@ -10,7 +10,9 @@ const STATES =
 const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+|\b(?:maps\.app\.goo\.gl|goo\.gl\/maps|g\.page|share\.google|g\.co\/kgs)\/[^\s<>"']+/gi;
 const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
 const PHONE_RE = /(?:\+?1[\s.-]*)?\(?\b\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\b/g;
-const GMB_RE = /maps\.app\.goo\.gl|goo\.gl\/maps|g\.page|share\.google|g\.co\/kgs|google\.[a-z.]+\/maps|maps\.google\.|[?&]cid=\d/i;
+const SOCIAL_RE =
+  /\b(facebook|fb|instagram|twitter|x|linkedin|youtube|youtu|tiktok|pinterest|yelp|reddit|tumblr|nextdoor|bbb|threads|medium|wa|whatsapp|t)\.(com|me|be|org|net)\b/i;
+const GMB_RE =/maps\.app\.goo\.gl|goo\.gl\/maps|g\.page|share\.google|g\.co\/kgs|google\.[a-z.]+\/maps|maps\.google\.|[?&]cid=\d/i;
 
 // "123 Main St, Suite 4, Springfield, MO 65802" (street optional, zip optional when there is a street)
 const ADDRESS_RE = new RegExp(
@@ -36,7 +38,7 @@ const FIELD_OF_LABEL = (l) => {
 const tidy = (s) => s.replace(/\s+/g, ' ').replace(/^[\s,;|•:\-–]+|[\s,;|•:\-–]+$/g, '').trim();
 
 export function parseDetails(raw) {
-  const out = { name: '', phone: '', email: '', address: '', gmb: '' };
+  const out = { name: '', phone: '', email: '', address: '', gmb: '', website: '' };
   if (!raw?.trim()) return out;
 
   // 1. labelled lines win ("Phone: ...")
@@ -46,7 +48,7 @@ export function parseDetails(raw) {
     if (m) {
       const field = FIELD_OF_LABEL(m[1]);
       const value = tidy(line.slice(m[0].length));
-      if (field !== 'website' && value && !out[field]) out[field] = value;
+      if (value && !out[field]) out[field] = value;
     } else unlabelled.push(line);
   }
   let text = unlabelled.join('\n');
@@ -59,9 +61,16 @@ export function parseDetails(raw) {
     });
   };
   take(URL_RE, (u) => {
-    if (!out.gmb && GMB_RE.test(u)) out.gmb = /^https?:/i.test(u) ? u : `https://${u}`;
+    const full = /^https?:/i.test(u) ? u : `https://${u}`;
+    if (GMB_RE.test(u)) out.gmb ||= full;
+    // the business's own site: the first link that isn't Google Maps or a social / directory profile
+    else if (!SOCIAL_RE.test(u)) out.website ||= full.replace(/[.,;)]+$/, '');
   });
   take(EMAIL_RE, (e) => (out.email ||= e));
+  // a bare domain ("colorstarspaintingllc.com"), once emails are out of the way
+  take(/\b(?:[a-z0-9-]+\.)+(?:com|net|org|co|us|biz|info|io|pro|services|llc|site|online)\b(?:\/[^\s<>"']*)?/gi, (d) => {
+    if (!out.website && !SOCIAL_RE.test(d) && !GMB_RE.test(d)) out.website = `https://${d.replace(/[.,;)]+$/, '')}`;
+  });
   take(PHONE_RE, (p) => (out.phone ||= tidy(p)));
 
   // 3. address: city + state (+ zip), with a street in front if there is one

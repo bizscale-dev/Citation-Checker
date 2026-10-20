@@ -116,4 +116,16 @@ export const IconChrome = (p) => (
     <path d="M21.2 8H12M3.9 6.1 8.5 14M10.9 21.9l4.6-7.9" />
   </Svg>
 );
-export const Spinner = ({ size = 16 }) => <span className="spinner" style={{ width: size, height: size }} aria-hidden="true" />;
+export const IconGlobe = (p) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </Svg>
+);
+export const IconUser = (p) => (
+  <Svg {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </Svg>
+);
+export const Spinner =({ size = 16 }) => <span className="spinner" style={{ width: size, height: size }} aria-hidden="true" />;

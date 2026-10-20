@@ -7,6 +7,7 @@ import {
   IconChrome,
   IconClipboard,
   IconExternal,
+  IconGlobe,
   IconGoogle,
   IconLink,
   IconLock,
@@ -17,6 +18,7 @@ import {
   IconRefresh,
   IconSearch,
   IconSparkle,
+  IconUser,
   IconX,
   Logo,
   Spinner,
@@ -28,9 +30,12 @@ const FIELDS = [
   { key: 'email', label: 'Email', icon: IconMail },
   { key: 'address', label: 'Address', icon: IconPin },
   { key: 'gmb', label: 'GMB Link', icon: IconGoogle },
+  { key: 'website', label: 'Website', icon: IconGlobe },
 ];
 
-const STATUS_LABEL = { match: 'Correct', partial: 'Close', mismatch: 'Wrong', absent: 'Not listed' };
+const STATUS_LABEL = { match: 'Correct', partial: 'Close', mismatch: 'Wrong', missing: 'Missing', absent: 'Not listed' };
+// statuses that make a card red
+const IS_ERROR = (c) => c && (c.status === 'mismatch' || c.status === 'missing');
 const CONCURRENCY = 4;
 
 const load = (k, fallback) => {
@@ -73,7 +78,11 @@ function useExtension() {
 
 // the server couldn't get the page (403 / bot check / empty), as opposed to a real answer
 const BLOCKED_STATUS = [401, 403, 406, 429, 503, 520, 521, 522, 523, 524, 525, 526, 530];
-const serverWasBlocked = (d) => !d.readable && !d.missing && (d.challenged || BLOCKED_STATUS.includes(d.httpStatus) || d.kind === 'unreadable');
+// (a connection reset / timeout also counts: e.g. tumblr is unreachable from some countries)
+const serverWasBlocked = (d) =>
+  !d.readable &&
+  !d.missing &&
+  (d.challenged || BLOCKED_STATUS.includes(d.httpStatus) || d.kind === 'unreadable' || /fetch failed|timed out/i.test(d.error || ''));
 
 async function callCheck(body) {
   const res = await fetch('/api/check', {
@@ -98,7 +107,14 @@ export default function App() {
   const info = useMemo(() => ({ ...parseDetails(details), ...overrides }), [details, overrides]);
   useEffect(() => localStorage.setItem('cc.details', JSON.stringify(details)), [details]);
   useEffect(() => localStorage.setItem('cc.overrides', JSON.stringify(overrides)), [overrides]);
-  const [linksText, setLinksText] = useState(() => load('cc.links', ''));
+  // two link lists: directory citations and profile-creation pages, each checked with its own rules
+  const [tab, setTab] = useState(() => load('cc.tab', 'citation')); // 'citation' | 'profile'
+  const [citationText, setCitationText] = useState(() => load('cc.links', ''));
+  const [profileText, setProfileText] = useState(() => load('cc.profileLinks', ''));
+  const linksText = tab === 'profile' ? profileText : citationText;
+  const setLinksText = tab === 'profile' ? setProfileText : setCitationText;
+  useEffect(() => localStorage.setItem('cc.tab', JSON.stringify(tab)), [tab]);
+  useEffect(() => localStorage.setItem('cc.profileLinks', JSON.stringify(profileText)), [profileText]);
   const [results, setResults] = useState({}); // url -> { loading, data, error }
   const [running, setRunning] = useState(false);
   const [pasteFor, setPasteFor] = useState(null);
@@ -113,12 +129,13 @@ export default function App() {
   useEffect(() => localStorage.setItem('cc.mode', JSON.stringify(mode)), [mode]);
   useEffect(() => localStorage.setItem('cc.serverChrome', JSON.stringify(serverChromeOpt)), [serverChromeOpt]);
 
-  useEffect(() => localStorage.setItem('cc.links', JSON.stringify(linksText)), [linksText]);
+  useEffect(() => localStorage.setItem('cc.links', JSON.stringify(citationText)), [citationText]);
 
-  const links = useMemo(
-    () => [...new Set(linksText.split(/\s+/).map((l) => l.trim()).filter((l) => /^https?:\/\//i.test(l)))],
-    [linksText],
-  );
+  const parseLinks = (t) => [...new Set(t.split(/\s+/).map((l) => l.trim()).filter((l) => /^https?:\/\//i.test(l)))];
+  const links = useMemo(() => parseLinks(linksText), [linksText]);
+  const profileLinks = useMemo(() => parseLinks(profileText), [profileText]);
+  const citationLinks = useMemo(() => parseLinks(citationText), [citationText]);
+  const kindOf = (url) => (profileLinks.includes(url) && (tab === 'profile' || !citationLinks.includes(url)) ? 'profile' : 'citation');
 
   const hasInfo = Object.values(info).some((v) => v.trim());
 
@@ -127,12 +144,13 @@ export default function App() {
   const checkOne = async (url, pastedText) => {
     setResults((r) => ({ ...r, [url]: { loading: true } }));
     try {
-      let data = await callCheck({ url, info, pastedText, serverChrome });
+      const kind = kindOf(url);
+      let data = await callCheck({ url, info, pastedText, serverChrome, kind });
       if (!pastedText && useMyChrome && serverWasBlocked(data)) {
         setResults((r) => ({ ...r, [url]: { loading: true, inYourChrome: true } }));
         const page = await extFetch(url);
         // your Chrome couldn't show it either (bad certificate, frozen tab...): keep the server's result
-        if (!page.error) data = await callCheck({ url, info, page });
+        if (!page.error) data = await callCheck({ url, info, page, kind });
       }
       setResults((r) => ({ ...r, [url]: { data } }));
     } catch (e) {
@@ -142,7 +160,8 @@ export default function App() {
 
   const checkAll = async () => {
     setRunning(true);
-    setResults({});
+    // clear only this tab's results; the other tab keeps its own
+    setResults((r) => Object.fromEntries(Object.entries(r).filter(([u]) => !links.includes(u))));
     const queue = [...links];
     const worker = async () => {
       while (queue.length) await checkOne(queue.shift());
@@ -181,18 +200,19 @@ export default function App() {
 
   const summary = useMemo(() => {
     const s = { ok: 0, bad: 0, unreadable: 0 };
-    for (const r of Object.values(results)) {
+    for (const r of links.map((u) => results[u]).filter(Boolean)) {
       if (!r.data) continue;
       if (r.data.missing) s.bad++;
       else if (!r.data.readable) s.unreadable++;
-      else if (Object.values(r.data.checks).some((c) => c && c.status === 'mismatch')) s.bad++;
+      else if (Object.values(r.data.checks).some(IS_ERROR)) s.bad++;
       else s.ok++;
     }
     return s;
-  }, [results]);
+  }, [results, links]);
 
-  const checkedCount = Object.values(results).filter((r) => r.data).length;
-  const loadingCount = Object.values(results).filter((r) => r.loading).length;
+  const tabResults = links.map((u) => results[u]).filter(Boolean);
+  const checkedCount = tabResults.filter((r) => r.data).length;
+  const loadingCount = tabResults.filter((r) => r.loading).length;
   const progress = links.length ? Math.round((checkedCount / links.length) * 100) : 0;
 
   return (
@@ -280,16 +300,36 @@ export default function App() {
               <IconLink />
             </span>
             <div>
-              <h2>Citation Links</h2>
-              <p className="panel-sub">One link per line</p>
+              <h2>{tab === 'profile' ? 'Profile Links' : 'Citation Links'}</h2>
+              <p className="panel-sub">
+                {tab === 'profile' ? 'Social & profile-creation pages, one per line' : 'Directory listings, one per line'}
+              </p>
             </div>
             {links.length > 0 && <span className="count-chip">{links.length} links</span>}
           </div>
+          <div className="tabs" role="tablist">
+            <button role="tab" aria-selected={tab === 'citation'} className={tab === 'citation' ? 'active' : ''} onClick={() => setTab('citation')} disabled={running}>
+              <IconPin size={15} /> Citations <span className="tab-count">{citationLinks.length}</span>
+            </button>
+            <button role="tab" aria-selected={tab === 'profile'} className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')} disabled={running}>
+              <IconUser size={15} /> Profiles <span className="tab-count">{profileLinks.length}</span>
+            </button>
+          </div>
+          {tab === 'profile' && (
+            <p className="tab-hint">
+              Profiles are checked for your <b>name</b> and <b>website link</b> (red if missing). A different phone is still
+              wrong; a city-only address is fine; no email or phone is just "Not listed".
+            </p>
+          )}
           <textarea
             className="links-input"
             rows={5}
             value={linksText}
-            placeholder={'https://findmetop.com/listing/...\nhttps://www.yelp.com/biz/...'}
+            placeholder={
+              tab === 'profile'
+                ? 'https://www.tumblr.com/yourbusiness\nhttps://www.reddit.com/user/...\nhttps://www.ranker.com/writer/...'
+                : 'https://findmetop.com/listing/...\nhttps://www.yelp.com/biz/...'
+            }
             onChange={(e) => setLinksText(e.target.value)}
           />
 
@@ -366,7 +406,7 @@ export default function App() {
             {links.map((url) => {
               const r = results[url];
               const d = r?.data;
-              const hasError = d?.missing || (d?.readable && Object.values(d.checks).some((c) => c && c.status === 'mismatch'));
+              const hasError = d?.missing || (d?.readable && Object.values(d.checks).some(IS_ERROR));
               const state = !r ? 'pending' : r.loading ? 'loading' : hasError ? 'bad' : !d.readable ? 'unreadable' : 'good';
               const badge = {
                 pending: ['Not checked', null],

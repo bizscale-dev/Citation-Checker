@@ -115,10 +115,14 @@ function extractPage(html) {
   const title = $('title').first().text().trim();
   // Google Business Profile links: anchors, map iframes, and URLs anywhere in the HTML (JSON-LD, scripts)
   const links = gmbLinksFrom($, html);
+  const hrefs = $('a[href]')
+    .map((_, el) => $(el).attr('href'))
+    .get()
+    .filter((h) => /^https?:\/\//i.test(h));
   $('script, style, noscript, svg').remove();
   const bodyText = $('body').length ? $('body').text() : $.root().text();
 
-  return { title, links, text: `${title}\n${bodyText}\n${extra.join('\n')}`.replace(/[ \t]+/g, ' ') };
+  return { title, links, hrefs, text: `${title}\n${bodyText}\n${extra.join('\n')}`.replace(/[ \t]+/g, ' ') };
 }
 
 function decodeCfEmail(hex) {
@@ -134,15 +138,19 @@ function decodeCfEmail(hex) {
 
 // ---------- field checks ----------
 
-function checkName(expected, text) {
+function checkName(expected, text, kind = 'citation') {
   if (!expected) return null;
   const n = normName(expected);
   const page = ` ${normName(text.replace(/\n/g, ' '))} `;
   if (page.includes(` ${n} `) || page.includes(n)) return { status: 'match' };
+  // profile handles / URLs write the name as one word: colorstarspaintingllc, Color_Stars_Painting_LLC
+  const compact = n.replace(/[^a-z0-9]/g, '');
+  if (compact.length >= 6 && page.replace(/[^a-z0-9]/g, '').includes(compact)) return { status: 'match', note: 'Found written as one word' };
   const tokens = n.split(' ').filter((t) => t.length > 1);
   const hits = tokens.filter((t) => page.includes(` ${t} `));
   if (tokens.length && hits.length / tokens.length >= 0.6)
     return { status: 'partial', note: `Missing words: ${tokens.filter((t) => !hits.includes(t)).join(', ')}` };
+  if (kind === 'profile') return { status: 'missing', note: 'Business name not on this profile' };
   return { status: 'mismatch', note: 'Business name not found on page' };
 }
 
@@ -179,7 +187,7 @@ function checkEmail(expected, text, siteHost = '') {
   return { status: 'mismatch', found, note: `Page shows: ${found.slice(0, 3).join(', ')}` };
 }
 
-function checkAddress(expected, text) {
+function checkAddress(expected, text, kind = 'citation') {
   if (!expected) return null;
   const want = normAddress(expected);
   const page = ` ${normAddress(text.replace(/\n/g, ' '))} `;
@@ -194,15 +202,51 @@ function checkAddress(expected, text) {
   const critical = missing.filter((t) => t === streetNum || t === zip || /^\d/.test(t));
   if (missing.length / parts.length <= 0.25 && !critical.length)
     return { status: 'partial', note: `Missing: ${missing.join(', ')}` };
+  if (kind === 'profile') {
+    // profiles normally show just "City, ST": that's fine, not an error
+    const segs = expected.split(',').map((x) => normAddress(x)).filter(Boolean);
+    const city = segs.length >= 2 ? segs[segs.length - 2] : '';
+    const state = (segs[segs.length - 1] || '').split(' ')[0];
+    if (city && page.includes(` ${city} `))
+      return { status: 'partial', note: `Only the city/area is shown (${city}${state && page.includes(` ${state} `) ? `, ${state}` : ''})` };
+    // profiles aren't expected to carry an address, so its absence isn't an error
+    return { status: 'absent', note: 'Address / city not shown on this profile' };
+  }
   return { status: 'mismatch', note: `Missing: ${missing.join(', ')}` };
 }
 
-function runChecks(info, text, siteHost) {
+// does the page link to (or mention) the business website?
+function checkWebsite(expected, hrefs, text, kind = 'citation') {
+  if (!expected?.trim()) return null;
+  let domain;
+  try {
+    domain = new URL(/^https?:/i.test(expected) ? expected : `https://${expected}`).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return null;
+  }
+  const linked = hrefs.some((h) => {
+    try {
+      const host = new URL(h).hostname.replace(/^www\./, '').toLowerCase();
+      return host === domain || host.endsWith(`.${domain}`);
+    } catch {
+      return false;
+    }
+  });
+  if (linked) return { status: 'match', note: 'Links to your website' };
+  if (text.toLowerCase().includes(domain)) return { status: 'partial', note: 'Website is mentioned but not linked' };
+  return kind === 'profile'
+    ? { status: 'missing', note: 'No link to your website on this profile' }
+    : { status: 'absent', note: 'No link to your website on this page' };
+}
+
+// kind: 'citation' (directory listing) or 'profile' (social / profile-creation page)
+function runChecks(info, text, siteHost, kind = 'citation', hrefs = []) {
   return {
-    name: checkName(info.name, text),
+    name: checkName(info.name, text, kind),
     phone: checkPhone(info.phone, text),
     email: checkEmail(info.email, text, siteHost),
-    address: checkAddress(info.address, text),
+    address: checkAddress(info.address, text, kind),
+    website: checkWebsite(info.website, hrefs, text, kind),
   };
 }
 
@@ -269,8 +313,8 @@ async function smartFetch(url, timeoutMs = 20000, { allowBrowser = true } = {}) 
 }
 
 // classify a fetched page and run the field checks on it
-function analyzePage(page, pageUrl, info) {
-  const { title, text, links } = extractPage(page.html);
+function analyzePage(page, pageUrl, info, kind = 'citation') {
+  const { title, text, links, hrefs } = extractPage(page.html);
   const wordCount = text.split(/\s+/).filter(Boolean).length;
   const alertMsg = (page.html.match(/alert\(['"]([^'"]+)['"]\)/) || [])[1];
   const reason = alertMsg || `HTTP ${page.status}`;
@@ -281,7 +325,7 @@ function analyzePage(page, pageUrl, info) {
   if (notFound) return { ...base, kind: 'missing', reason };
   if (!page.ok || wordCount < 25) return { ...base, kind: 'unreadable', reason };
 
-  const checks = runChecks(info, text, new URL(pageUrl).hostname.replace(/^www\./, ''));
+  const checks = runChecks(info, text, new URL(pageUrl).hostname.replace(/^www\./, ''), kind, hrefs);
   const looksLikeLogin = /log ?in|sign ?in/i.test(title) && Object.values(checks).every((c) => !c || c.status !== 'match');
   // gmbLinks is kept off the JSON response; only withGmb() uses it
   return Object.defineProperty({ ...base, kind: looksLikeLogin ? 'login' : 'ok', reason, checks }, 'gmbLinks', { value: links });
@@ -321,11 +365,13 @@ app.post('/api/check', async (req, res) => {
   // `page` = HTML already loaded in the user's own Chrome by the helper extension
   // serverChrome: opt-in to the checker's own hidden Chrome (separate profile: no VPN, no logins)
   const { url, info, pastedText, page, findPublic = true, serverChrome = false } = req.body || {};
+  const kind = req.body?.kind === 'profile' ? 'profile' : 'citation';
   if (!info) return res.status(400).json({ error: 'Missing business info' });
 
   // manual mode: user pasted the page content themselves
   if (pastedText) {
-    const pasted = { checks: runChecks(info, pastedText), gmbLinks: gmbLinksFrom(cheerio.load(''), pastedText) };
+    const pastedLinks = pastedText.match(/https?:\/\/[^\s"'<>]+/gi) || [];
+    const pasted = { checks: runChecks(info, pastedText, '', kind, pastedLinks), gmbLinks: gmbLinksFrom(cheerio.load(''), pastedText) };
     await withGmb(pasted, info);
     return res.json({ readable: true, source: 'pasted', checks: pasted.checks });
   }
@@ -341,8 +387,8 @@ app.post('/api/check', async (req, res) => {
   let a;
   try {
     a = page?.html
-      ? analyzePage({ ok: page.ok, status: page.status, finalUrl: page.finalUrl, html: page.html, challenged: page.challenged, via: 'your-chrome' }, target.href, info)
-      : analyzePage(await smartFetch(target.href, 20000, { allowBrowser: serverChrome }), target.href, info);
+      ? analyzePage({ ok: page.ok, status: page.status, finalUrl: page.finalUrl, html: page.html, challenged: page.challenged, via: 'your-chrome' }, target.href, info, kind)
+      : analyzePage(await smartFetch(target.href, 20000, { allowBrowser: serverChrome }), target.href, info, kind);
   } catch (err) {
     return res.json({ readable: false, error: err.name === 'AbortError' ? 'Timed out after 20s' : `Fetch failed: ${err.cause?.code || err.message}` });
   }
@@ -352,7 +398,7 @@ app.post('/api/check', async (req, res) => {
   // owner links work in Chrome once you've logged in there via "Open in Chrome"
   if (serverChrome && ownerLink && a.kind !== 'ok' && a.fetchedWith === 'http' && (await getChromePath())) {
     try {
-      const b = analyzePage(await browserFetch(target.href), target.href, info);
+      const b = analyzePage(await browserFetch(target.href), target.href, info, kind);
       if (b.kind === 'ok' && b.checks.name?.status === 'match') a = b;
     } catch {}
   }
@@ -361,7 +407,7 @@ app.post('/api/check', async (req, res) => {
   const needsPublic = a.kind === 'missing' || (ownerLink && (a.kind !== 'ok' || nameMissing));
 
   // owner/edit link or dead link: look for the public listing on the same site
-  if (needsPublic && findPublic && info.name?.trim()) {
+  if (needsPublic && findPublic && kind === 'citation' && info.name?.trim()) {
     const slow = serverChrome && browserHosts.has(hostOf(target.href));
     const hit = await findPublicListing({
       url: target.href,
@@ -373,7 +419,7 @@ app.post('/api/check', async (req, res) => {
       budgetMs: slow ? 90000 : 45000,
     }).catch(() => null);
     if (hit?.found) {
-      const pub = analyzePage({ ok: true, status: hit.status, finalUrl: hit.publicUrl, html: hit.html }, hit.publicUrl, info);
+      const pub = analyzePage({ ok: true, status: hit.status, finalUrl: hit.publicUrl, html: hit.html }, hit.publicUrl, info, kind);
       if (pub.kind === 'ok') {
         await withGmb(pub, info);
         return res.json(
