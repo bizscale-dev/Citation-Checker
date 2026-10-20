@@ -6,3 +6,8 @@ dist
 # secrets (Vercel token, proxy credentials); the example file is kept
 .env*
 !.env.example
+
+# archives (e.g. a zipped copy of the extension to share)
+*.rar
+*.zip
+*.7z
